@@ -4,5 +4,5 @@
   "documentation": "",
   "dependencies": [],
   "codeowners": ["@adam.polomski"],
-  "requirements": ["podkowaaq==0.0.1"]
+  "requirements": []
 }

@@ -1,6 +1,16 @@
+"""Platform air quality monitoring in Podkowa Leśna."""
+import logging
+import voluptuous as vol
+import homeassistant.helpers.config_validation as cv
 from homeassistant.components.air_quality import AirQualityEntity
 
 DOMAIN = "podkowaaq"
+_LOGGER = logging.getLogger(__name__)
+
+# Validation of the user's configuration
+CONFIG_SCHEMA = vol.Schema(
+    {DOMAIN: vol.Schema({vol.Required("text"): cv.string,})}, extra=vol.ALLOW_EXTRA
+)
 
 def setup_platform(hass, config, add_entities, discovery_info=None):
     """Set up the sensor platform."""
