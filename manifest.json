@@ -1,0 +1,8 @@
+{
+  "domain": "podkowaaq",
+  "name": "Podkowa Air Quality",
+  "documentation": "",
+  "dependencies": [],
+  "codeowners": ["@adam.polomski"],
+  "requirements": ["podkowaaq==0.0.1"]
+}
