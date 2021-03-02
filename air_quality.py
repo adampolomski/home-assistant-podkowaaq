@@ -1,19 +1,23 @@
 """Platform air quality monitoring in Podkowa Leśna."""
 import logging
 import time
+from datetime import timedelta
 from functools import partial
 
 import homeassistant.helpers.config_validation as cv
 import requests
 import voluptuous as vol
-from homeassistant.components.air_quality import AirQualityEntity
+from homeassistant.components.air_quality import AirQualityEntity, PLATFORM_SCHEMA
 
-DOMAIN = "podkowaaq"
 _LOGGER = logging.getLogger(__name__)
 
-# Validation of the user's configuration
-CONFIG_SCHEMA = vol.Schema(
-    {DOMAIN: vol.Schema({vol.Required("station"): cv.string, })}, extra=vol.PREVENT_EXTRA
+DOMAIN = "podkowaaq"
+SCAN_INTERVAL = timedelta(minutes=20)
+
+PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+    {
+        vol.Required("station"): cv.string
+    }
 )
 
 
@@ -23,20 +27,16 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
     add_entities([PodkowaAQ(repository)])
 
 
-class Measurement():
-
-    def __init__(self, pm25: float, pm10: float):
-        self._pm25 = pm25
-        self._pm10 = pm10
+class Measurement:
 
     def pm25(self):
-        return self._pm25
+        return None
 
     def pm10(self):
-        return self._pm10
+        return None
 
 
-class MeasurementRepository():
+class MeasurementRepository:
     URL = 'https://powietrze.podkowalesna.pl/webapp/data/averages'
     METRICS = ["PM10", "PM25"]
 
@@ -44,15 +44,39 @@ class MeasurementRepository():
         end = int(time.time())
         start = end - 7200
 
-        pattern = "{0}_{1}:A1h"
-        vars = map(partial(pattern.format, "PD01"), MeasurementRepository.METRICS)
-        vars = ','.join(vars)
+        response = requests.get(MeasurementRepository.URL, {
+            "_dc": 1614541470669,
+            "type": "chart",
+            "avg": "1h",
+            "start": start,
+            "end": end,
+            "vars": MeasurementRepository._vars("PD01")
+        })
 
-        x = requests.get(MeasurementRepository.URL,
-                         {"_dc": 1614541470669, "type": "chart", "avg": "1h", "start": start, "end": end, "vars": vars})
-        pm10 = x.json()['values'][0][0]['v']
-        pm25 = x.json()['values'][1][0]['v']
-        return Measurement(pm25, pm10)
+        return JsonMeasurement(response.json())
+
+    @staticmethod
+    def _vars(station):
+        pattern = "{0}_{1}:A1h"
+        vars = map(partial(pattern.format, station), MeasurementRepository.METRICS)
+        vars = ','.join(vars)
+        return vars
+
+
+class JsonMeasurement(Measurement):
+
+    def __init__(self, json):
+        self._json = json
+
+    def _value(self, metric):
+        index = MeasurementRepository.METRICS.index(metric)
+        return self._json['values'][index][-1]['v']
+
+    def pm25(self):
+        return self._value("PM25")
+
+    def pm10(self):
+        return self._value("PM10")
 
 
 class PodkowaAQ(AirQualityEntity):
@@ -60,11 +84,12 @@ class PodkowaAQ(AirQualityEntity):
     def __init__(self, repository: MeasurementRepository):
         """Initialize the sensor."""
         self._repository = repository
+        self._measurement = Measurement()
 
     @property
     def name(self):
         """Return the name of the sensor."""
-        return 'Air Quality'
+        return 'pd01'
 
     @property
     def particulate_matter_2_5(self):
