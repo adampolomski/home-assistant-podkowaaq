@@ -12,7 +12,7 @@ class TestMeasurementRepository(TestCase):
         self.assertEqual(36.0333, measurement.pm25())
 
     # def test_collect(self):
-    #     repository = MeasurementRepository()
+    #     repository = MeasurementRepository("pd01")
     #
     #     measurement = repository.collect()
     #     self.assertEqual(1, measurement.pm10())

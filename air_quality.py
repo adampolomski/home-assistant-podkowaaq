@@ -3,27 +3,30 @@ import logging
 import time
 from datetime import timedelta
 from functools import partial
+from typing import Optional
 
 import homeassistant.helpers.config_validation as cv
 import requests
 import voluptuous as vol
 from homeassistant.components.air_quality import AirQualityEntity, PLATFORM_SCHEMA
+from homeassistant.util import Throttle
 
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "podkowaaq"
-SCAN_INTERVAL = timedelta(minutes=20)
+
+CONF_STATION = "station"
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
-        vol.Required("station"): cv.string
+        vol.Required(CONF_STATION): cv.string
     }
 )
 
 
 def setup_platform(hass, config, add_entities, discovery_info=None):
-    """Set up the sensor platform."""
-    repository = MeasurementRepository()
+    station = config.get(CONF_STATION)
+    repository = MeasurementRepository(station)
     add_entities([PodkowaAQ(repository)])
 
 
@@ -40,7 +43,11 @@ class MeasurementRepository:
     URL = 'https://powietrze.podkowalesna.pl/webapp/data/averages'
     METRICS = ["PM10", "PM25"]
 
-    def collect(self):
+    def __init__(self, station: str):
+        assert station.isalnum()
+        self._station = station.upper()
+
+    def collect(self) -> Measurement:
         end = int(time.time())
         start = end - 7200
 
@@ -50,17 +57,17 @@ class MeasurementRepository:
             "avg": "1h",
             "start": start,
             "end": end,
-            "vars": MeasurementRepository._vars("PD01")
+            "vars": MeasurementRepository._parameters(self._station)
         })
 
         return JsonMeasurement(response.json())
 
     @staticmethod
-    def _vars(station):
+    def _parameters(station):
         pattern = "{0}_{1}:A1h"
-        vars = map(partial(pattern.format, station), MeasurementRepository.METRICS)
-        vars = ','.join(vars)
-        return vars
+        parameters = map(partial(pattern.format, station), MeasurementRepository.METRICS)
+        parameters = ','.join(parameters)
+        return parameters
 
 
 class JsonMeasurement(Measurement):
@@ -81,15 +88,19 @@ class JsonMeasurement(Measurement):
 
 class PodkowaAQ(AirQualityEntity):
 
-    def __init__(self, repository: MeasurementRepository):
+    def __init__(self, station: str, repository: MeasurementRepository):
         """Initialize the sensor."""
         self._repository = repository
         self._measurement = Measurement()
+        self._station = station
 
     @property
-    def name(self):
-        """Return the name of the sensor."""
-        return 'pd01'
+    def name(self) -> Optional[str]:
+        return 'PodkowaAQ %s' % self._station.upper()
+
+    @property
+    def unique_id(self) -> Optional[str]:
+        return self._station
 
     @property
     def particulate_matter_2_5(self):
@@ -99,6 +110,6 @@ class PodkowaAQ(AirQualityEntity):
     def particulate_matter_10(self):
         return self._measurement.pm10()
 
+    @Throttle(min_time=timedelta(minutes=20))
     def update(self):
-        """Fetch new state data for the sensor."""
         self._measurement = self._repository.collect()
