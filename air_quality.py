@@ -27,7 +27,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
 def setup_platform(hass, config, add_entities, discovery_info=None):
     station = config.get(CONF_STATION)
     repository = MeasurementRepository(station)
-    add_entities([PodkowaAQ(repository)])
+    add_entities([PodkowaAQ(station, repository)])
 
 
 class Measurement:
